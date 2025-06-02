@@ -1,0 +1,749 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>JDK 8 vs JDK 21: 交互式探索</title>
+    <meta name="description" content="深入对比JDK 8与JDK 21的特性演进，包含虚拟线程、Record模式、Switch模式匹配等核心功能">
+    <meta name="keywords" content="Java,JDK,JDK8,JDK21,虚拟线程,Record,Switch,模式匹配">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-core.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-java.min.js"></script>
+    <link href="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism-tomorrow.min.css" rel="stylesheet">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@300;400;500;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Noto Sans SC', sans-serif;
+            background-color: #f1f5f9;
+            color: #1e293b;
+            scroll-behavior: smooth;
+        }
+        .chart-container {
+            position: relative;
+            width: 100%;
+            max-width: 800px;
+            margin-left: auto;
+            margin-right: auto;
+            height: 300px;
+            max-height: 400px;
+        }
+        @media (min-width: 768px) {
+            .chart-container {
+                height: 400px;
+            }
+        }
+        .nav-link {
+            transition: color 0.3s, border-color 0.3s;
+        }
+        .nav-link.active {
+            color: #4f46e5;
+            border-bottom-color: #4f46e5;
+        }
+        .feature-card, .timeline-item, .accordion-item {
+            transition: all 0.3s ease-in-out;
+        }
+        .code-block {
+            background: linear-gradient(135deg, #2d3748 0%, #1a202c 100%);
+            color: #e2e8f0;
+            padding: 1.5rem;
+            border-radius: 0.75rem;
+            font-family: 'JetBrains Mono', 'Courier New', monospace;
+            white-space: pre-wrap;
+            font-size: 0.875rem;
+            border: 1px solid #4a5568;
+            position: relative;
+            overflow-x: auto;
+        }
+        .code-block::before {
+            content: 'Java';
+            position: absolute;
+            top: 0.5rem;
+            right: 1rem;
+            background: #4f46e5;
+            color: white;
+            padding: 0.25rem 0.5rem;
+            border-radius: 0.25rem;
+            font-size: 0.75rem;
+            font-weight: 500;
+        }
+        .code-block.bash::before {
+            content: 'Bash';
+            background: #22c55e;
+        }
+        .accordion-content {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.5s ease-in-out;
+        }
+        .copy-button {
+            position: absolute;
+            top: 0.5rem;
+            left: 1rem;
+            background: rgba(255, 255, 255, 0.1);
+            color: #e2e8f0;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            padding: 0.25rem 0.5rem;
+            border-radius: 0.25rem;
+            font-size: 0.75rem;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .copy-button:hover {
+            background: rgba(255, 255, 255, 0.2);
+        }
+        .progress-bar {
+            position: fixed;
+            top: 0;
+            left: 0;
+            height: 3px;
+            background: linear-gradient(90deg, #4f46e5, #7c3aed);
+            transition: width 0.3s ease;
+            z-index: 1000;
+        }
+        .floating-toc {
+            position: fixed;
+            right: 2rem;
+            top: 50%;
+            transform: translateY(-50%);
+            background: white;
+            border-radius: 0.75rem;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+            padding: 1rem;
+            z-index: 40;
+            max-height: 60vh;
+            overflow-y: auto;
+            transition: all 0.3s ease;
+        }
+        @media (max-width: 1024px) {
+            .floating-toc {
+                display: none;
+            }
+        }
+        .toc-item {
+            display: block;
+            padding: 0.5rem 0;
+            color: #6b7280;
+            text-decoration: none;
+            font-size: 0.875rem;
+            transition: color 0.2s;
+            border-left: 3px solid transparent;
+            padding-left: 0.75rem;
+        }
+        .toc-item:hover {
+            color: #4f46e5;
+        }
+        .toc-item.active {
+            color: #4f46e5;
+            border-left-color: #4f46e5;
+        }
+    </style>
+</head>
+<body class="bg-slate-100 text-slate-800">
+    <!-- Progress Bar -->
+    <div class="progress-bar" id="progressBar"></div>
+    
+    <!-- Floating Table of Contents -->
+    <nav class="floating-toc" id="floatingToc">
+        <h3 class="font-semibold text-gray-800 mb-3 text-sm">目录</h3>
+        <a href="#overview" class="toc-item">概览</a>
+        <a href="#timeline" class="toc-item">演进时间线</a>
+        <a href="#jdk21" class="toc-item">聚焦 JDK 21</a>
+        <a href="#comparison" class="toc-item">语法对比</a>
+        <a href="#migration" class="toc-item">迁移指南</a>
+    </nav>
+
+    <header class="bg-white/80 backdrop-blur-lg shadow-sm sticky top-0 z-50">
+        <nav class="container mx-auto px-6 py-3">
+            <div class="flex justify-between items-center">
+                <h1 class="text-xl md:text-2xl font-bold text-indigo-600">JDK 8 → 21 演进之旅</h1>
+                <div class="hidden md:flex space-x-8">
+                    <a href="#overview" class="nav-link text-slate-600 hover:text-indigo-600 border-b-2 border-transparent pb-1">概览</a>
+                    <a href="#timeline" class="nav-link text-slate-600 hover:text-indigo-600 border-b-2 border-transparent pb-1">演进时间线</a>
+                    <a href="#jdk21" class="nav-link text-slate-600 hover:text-indigo-600 border-b-2 border-transparent pb-1">聚焦 JDK 21</a>
+                    <a href="#comparison" class="nav-link text-slate-600 hover:text-indigo-600 border-b-2 border-transparent pb-1">语法对比</a>
+                    <a href="#migration" class="nav-link text-slate-600 hover:text-indigo-600 border-b-2 border-transparent pb-1">迁移指南</a>
+                </div>
+                <button id="mobile-menu-button" class="md:hidden text-slate-600 focus:outline-none">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16m-7 6h7"></path></svg>
+                </button>
+            </div>
+             <div id="mobile-menu" class="hidden md:hidden mt-4">
+                <a href="#overview" class="block py-2 text-slate-600 hover:text-indigo-600">概览</a>
+                <a href="#timeline" class="block py-2 text-slate-600 hover:text-indigo-600">演进时间线</a>
+                <a href="#jdk21" class="block py-2 text-slate-600 hover:text-indigo-600">聚焦 JDK 21</a>
+                <a href="#comparison" class="block py-2 text-slate-600 hover:text-indigo-600">语法对比</a>
+                <a href="#migration" class="block py-2 text-slate-600 hover:text-indigo-600">迁移指南</a>
+            </div>
+        </nav>
+    </header>
+
+    <main class="container mx-auto px-6 py-8">
+
+        <section id="overview" class="scroll-mt-20 py-16 text-center">
+            <h2 class="text-3xl md:text-4xl font-bold mb-4">从经典到现代的飞跃</h2>
+            <p class="max-w-3xl mx-auto text-slate-600 text-lg">从 JDK 8 升级到 JDK 21 是一次重大的技术跨越。这期间 Java 不仅加快了更新步伐，更在语言简洁性、并发性能、API 设计和开发体验上实现了全方位现代化。本应用将带您探索这段演进历程中的核心变化，助您理解并拥抱现代 Java 的强大能力。</p>
+            <div class="mt-12">
+                <h3 class="text-2xl font-semibold mb-6">特性演进概览</h3>
+                 <p class="max-w-3xl mx-auto text-slate-600 mb-8">下图展示了从 JDK 8 到 21 各个版本中引入的主要特性类别分布。您可以清晰地看到语言本身（Language）、并发模型（Concurrency）和 API 的持续丰富是 Java 演进的主旋律。请将鼠标悬停在图表条目上以查看具体数量。</p>
+                <div class="chart-container bg-white p-4 rounded-lg shadow-md">
+                    <canvas id="featuresChart"></canvas>
+                </div>
+            </div>
+        </section>
+
+        <section id="timeline" class="scroll-mt-20 py-16">
+            <h2 class="text-3xl md:text-4xl font-bold text-center mb-12">Java 演进时间线 (JDK 9 - 20)</h2>
+            <p class="max-w-3xl mx-auto text-center text-slate-600 mb-16">自 JDK 8 之后，Java 进入了快速迭代的轨道。每个版本都带来了值得关注的新特性与改进。点击下方的版本号，可以展开或折叠该版本的关键更新内容，快速了解每个阶段的里程碑。</p>
+            <div id="timeline-container" class="relative max-w-4xl mx-auto">
+            </div>
+        </section>
+
+        <section id="jdk21" class="scroll-mt-20 py-16 bg-white rounded-2xl shadow-lg">
+            <div class="text-center mb-12">
+                <h2 class="text-3xl md:text-4xl font-bold">聚焦 JDK 21: 核心新特性</h2>
+                <p class="max-w-3xl mx-auto text-slate-600 mt-4">JDK 21 作为一个新的长期支持(LTS)版本，正式引入了多个重大特性，极大地提升了开发效率和应用性能。这里列出了最值得关注的几项更新。点击卡片可以展开查看更详细的说明和代码示例。</p>
+            </div>
+            <div id="jdk21-features-container" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 px-8">
+            </div>
+        </section>
+
+        <section id="comparison" class="scroll-mt-20 py-16">
+            <h2 class="text-3xl md:text-4xl font-bold text-center mb-12">代码演变：JDK 8 vs JDK 21 语法对比</h2>
+            <p class="max-w-3xl mx-auto text-center text-slate-600 mb-16">理论千遍，不如代码一行。没有什么比直接的代码对比更能体现语言的进步。下面我们来看几个典型场景，感受一下从 JDK 8 到 JDK 21，代码是如何变得更加简洁、安全和富有表现力的。</p>
+            <div id="comparison-container" class="space-y-12">
+            </div>
+        </section>
+
+        <section id="migration" class="scroll-mt-20 py-16">
+            <h2 class="text-3xl md:text-4xl font-bold text-center mb-12">迁移到 JDK 21：主要注意事项</h2>
+             <p class="max-w-3xl mx-auto text-center text-slate-600 mb-16">升级到 JDK 21 的过程需要关注一些关键变化点。我们为您总结了几个最重要的注意事项，以帮助您的迁移过程更加顺畅。点击每个标题可以展开查看详细说明。</p>
+            <div id="migration-guide-container" class="max-w-4xl mx-auto bg-white rounded-lg shadow-md p-4 md:p-8">
+            </div>
+        </section>
+
+    </main>
+
+    <!-- Back to Top Button -->
+    <button id="backToTop" class="fixed bottom-8 right-8 bg-indigo-600 hover:bg-indigo-700 text-white p-3 rounded-full shadow-lg transition-all duration-300 opacity-0 pointer-events-none z-50">
+        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 10l7-7m0 0l7 7m-7-7v18"></path>
+        </svg>
+    </button>
+
+    <footer class="bg-slate-800 text-slate-300 py-8">
+        <div class="container mx-auto px-6 text-center">
+            <div class="flex flex-col md:flex-row items-center justify-between">
+                <p class="mb-4 md:mb-0">为 Java 开发者打造的交互式演进指南</p>
+                <div class="flex space-x-4">
+                    <span class="text-sm text-slate-400">📅 最后更新: 2025-06-01</span>
+                    <span class="text-sm text-slate-400">📖 版本: 1.2</span>
+                </div>
+            </div>
+            <div class="mt-4 pt-4 border-t border-slate-700">
+                <p class="text-sm text-slate-400">包含 JDK 9-21 的完整特性演进 • 交互式代码示例 • 迁移最佳实践</p>
+            </div>
+        </div>
+    </footer>
+
+    <script>
+    document.addEventListener('DOMContentLoaded', () => {
+
+        const timelineData = [
+            { version: 'JDK 9', features: ['模块化系统 (Project Jigsaw)', 'JShell (REPL)', '集合工厂方法 (List.of)', '接口私有方法'] },
+            { version: 'JDK 10', features: ['局部变量类型推断 (var)'] },
+            { version: 'JDK 11 (LTS)', features: ['标准化 HTTP Client API', 'String/Files API 增强', '运行单文件源代码'] },
+            { version: 'JDK 12', features: ['Switch 表达式 (预览)'] },
+            { version: 'JDK 13', features: ['文本块 (预览)'] },
+            { version: 'JDK 14', features: ['Switch 表达式 (正式)', 'Records (预览)', 'instanceof 的模式匹配 (预览)'] },
+            { version: 'JDK 15', features: ['文本块 (正式)', 'Sealed Classes (预览)'] },
+            { version: 'JDK 16', features: ['Records (正式)', 'instanceof 的模式匹配 (正式)'] },
+            { version: 'JDK 17 (LTS)', features: ['Sealed Classes (正式)', 'Switch 的模式匹配 (预览)', '强封装 JDK 内部 API'] },
+            { version: 'JDK 18', features: ['默认 UTF-8', '简单的 Web 服务器'] },
+            { version: 'JDK 19', features: ['虚拟线程 (预览)', 'Record Patterns (预览)', '结构化并发 (孵化)'] },
+            { version: 'JDK 20', features: ['虚拟线程 (第二次预览)', 'Record Patterns (第二次预览)'] },
+        ];
+
+        const jdk21Features = [
+            {
+                title: '虚拟线程 (Virtual Threads)',
+                icon: '🚀',
+                summary: '由 JDK 管理的轻量级线程，可大幅提升高并发应用吞吐量，同时保持简单的阻塞式编程模型。',
+                details: '这是 JDK 21 中最受瞩目的特性。虚拟线程允许服务器用极小的开销处理海量并发连接，开发者不再需要为了性能而编写复杂、难以调试的异步代码。',
+                code: `try (var executor = Executors.newVirtualThreadPerTaskExecutor()) {
+    IntStream.range(0, 10_000).forEach(i -> {
+        executor.submit(() -> {
+            Thread.sleep(Duration.ofSeconds(1));
+            return i;
+        });
+    });
+} // executor.close() is called implicitly, and waits`
+            },
+            {
+                title: 'Record Patterns (记录模式)',
+                icon: '🧩',
+                summary: '扩展模式匹配能力，用于解构 record 实例，让代码更简洁、可读性更高。',
+                details: '结合 `instanceof` 和 `switch`，记录模式可以方便地从 record 对象中提取组件，避免了繁琐的 getter 调用。',
+                code: `// record Point(int x, int y) {}
+if (obj instanceof Point(int x, int y)) {
+    System.out.println("x = " + x + ", y = " + y);
+}`
+            },
+            {
+                title: 'Switch 的模式匹配',
+                icon: '🔀',
+                summary: '允许在 switch 语句和表达式中使用类型模式，使其更强大、更富有表现力。',
+                details: '新的 switch 不仅可以匹配常量，还可以匹配类型，并能在 case 分支中直接声明绑定变量，同时保证了完备性检查。',
+                code: `String formatted = switch (obj) {
+    case Integer i -> String.format("int %d", i);
+    case Long l    -> String.format("long %d", l);
+    case String s  -> String.format("String %s", s);
+    default        -> obj.toString();
+};`
+            },
+            {
+                title: '序列化集合 (Sequenced Collections)',
+                icon: '⛓️',
+                summary: '引入新接口，为具有确定遇到顺序的集合提供统一的操作，如获取首尾元素、反转等。',
+                details: '`SequencedCollection`, `SequencedSet`, `SequencedMap` 接口统一了 `List`, `Deque`, `LinkedHashSet` 等集合的操作。现在你可以用 `list.getFirst()` 和 `list.getLast()` 等通用方法了。',
+                code: `List<String> list = new ArrayList<>();
+list.add("A");
+list.add("B");
+String first = list.getFirst(); // "A"
+String last = list.getLast();   // "B"
+List<String> reversed = list.reversed(); // ["B", "A"]`
+            },
+            {
+                title: '分代 ZGC',
+                icon: '🗑️',
+                summary: '通过引入分代回收机制改进 ZGC，通常可以降低延迟、减少 CPU 开销，并减少内存占用。',
+                details: 'ZGC 是一个低延迟垃圾收集器。引入分代特性后，它在处理大多数对象的生命周期“朝生夕死”这一普遍模式时会更加高效，进一步提升应用性能。',
+                code: `// 启用方式:
+// java -XX:+UseZGC -XX:+ZGenerational ...`
+            },
+            {
+                title: '未命名模式与变量 (预览)',
+                icon: '🤫',
+                summary: '允许使用下划线 `_` 来表示未使用的模式变量或 lambda 参数，提升代码可读性。',
+                details: '当你在模式匹配或 lambda 表达式中不需要用到某个绑定变量或参数时，使用 `_` 可以明确地向代码读者传达“这个值被刻意忽略了”的意图。',
+                code: `// 假设有 record Point(int x, int y) {}
+if (obj instanceof Point(int x, _)) { 
+    // y 坐标在此处未使用
+    System.out.println("x = " + x);
+}`
+            }
+        ];
+        
+        const comparisonData = [
+            {
+                title: '创建数据类：Class vs. Record',
+                jdk8: `public final class Point {
+    private final int x;
+    private final int y;
+
+    public Point(int x, int y) {
+        this.x = x;
+        this.y = y;
+    }
+
+    public int x() { return x; }
+    public int y() { return y; }
+
+    @Override
+    public boolean equals(Object obj) { /*...*/ }
+
+    @Override
+    public int hashCode() { /*...*/ }
+
+    @Override
+    public String toString() { /*...*/ }
+}`,
+                jdk21: `public record Point(int x, int y) { }`
+            },
+            {
+                title: 'Switch 语句：传统 vs. 模式匹配',
+                jdk8: `Object obj = "Hello";
+String result;
+if (obj instanceof String) {
+    result = "It's a String: " + (String) obj;
+} else if (obj instanceof Integer) {
+    result = "It's an Integer: " + (Integer) obj;
+} else {
+    result = "Unknown type";
+}`,
+                jdk21: `Object obj = "Hello";
+String result = switch (obj) {
+    case String s  -> "It's a String: " + s;
+    case Integer i -> "It's an Integer: " + i;
+    default        -> "Unknown type";
+};`
+            },
+            {
+                title: '字符串拼接 vs. 字符串模板 (预览)',
+                jdk8: `String name = "World";
+int value = 42;
+String message = "Hello, " + name + "! The value is " + value + ".";`,
+                jdk21: `String name = "World";
+int value = 42;
+String message = STR."Hello, \{name}! The value is \{value}.";`
+            }
+        ];
+
+        const migrationData = [
+            {
+                title: '模块化 (JPMS) 与依赖变更',
+                content: 'JDK 9 引入的模块化系统要求更明确的依赖关系。许多在 JDK 8 中属于标准库的 Java EE 和 CORBA 模块 (如 JAXB, JAX-WS) 在 JDK 11 中被移除，您需要将它们作为外部依赖（例如从 Maven Central）添加到项目中。同时，对 JDK 内部 API (如 `sun.misc.Unsafe`) 的访问受到了严格限制。'
+            },
+            {
+                title: 'API 的移除与废弃',
+                content: '一些在 JDK 8 中被标记为 `@Deprecated` 的 API 可能在后续版本中被正式移除。例如，Applet API、SecurityManager 等正在被逐步移除。在迁移前，强烈建议使用静态分析工具检查代码中是否使用了这些过时的 API。'
+            },
+            {
+                title: '构建工具和库的兼容性',
+                content: '确保您的构建工具 (Maven, Gradle 等) 和项目依赖的第三方库都升级到与 JDK 21 兼容的版本。老的库可能使用了被移除的 API 或不兼容的字节码特性，会导致构建失败或运行时错误。'
+            },
+            {
+                title: '行为变更',
+                content: '虽然 Java 努力保持向后兼容，但某些细微的行为变更可能存在。例如，默认字符集在 JDK 18 中变为 UTF-8。务必在迁移后进行充分的回归测试，以确保应用行为符合预期。'
+            }
+        ];
+
+        function setupAccordion(containerSelector) {
+            const accordionItems = document.querySelectorAll(`${containerSelector} .accordion-item`);
+            accordionItems.forEach(item => {
+                const header = item.querySelector('.accordion-header');
+                const content = item.querySelector('.accordion-content');
+                if (header && content) {
+                    header.addEventListener('click', () => {
+                        const isExpanded = header.getAttribute('aria-expanded') === 'true';
+                        
+                        // Close all others
+                        accordionItems.forEach(otherItem => {
+                           const otherHeader = otherItem.querySelector('.accordion-header');
+                           const otherContent = otherItem.querySelector('.accordion-content');
+                           if(otherItem !== item) {
+                               otherHeader.setAttribute('aria-expanded', 'false');
+                               otherHeader.querySelector('svg').style.transform = 'rotate(0deg)';
+                               otherContent.style.maxHeight = '0';
+                           }
+                        });
+
+                        if (isExpanded) {
+                            header.setAttribute('aria-expanded', 'false');
+                            header.querySelector('svg').style.transform = 'rotate(0deg)';
+                            content.style.maxHeight = '0';
+                        } else {
+                            header.setAttribute('aria-expanded', 'true');
+                            header.querySelector('svg').style.transform = 'rotate(180deg)';
+                            content.style.maxHeight = content.scrollHeight + 'px';
+                        }
+                    });
+                }
+            });
+        }
+
+        function addCopyButton() {
+            document.querySelectorAll('.code-block').forEach(block => {
+                if (!block.querySelector('.copy-button')) {
+                    const button = document.createElement('button');
+                    button.className = 'copy-button';
+                    button.textContent = '复制';
+                    button.addEventListener('click', async () => {
+                        try {
+                            await navigator.clipboard.writeText(block.textContent);
+                            button.textContent = '已复制!';
+                            setTimeout(() => {
+                                button.textContent = '复制';
+                            }, 2000);
+                        } catch (err) {
+                            button.textContent = '复制失败';
+                            setTimeout(() => {
+                                button.textContent = '复制';
+                            }, 2000);
+                        }
+                    });
+                    block.style.position = 'relative';
+                    block.appendChild(button);
+                }
+            });
+        }
+
+        function setupProgressBar() {
+            const progressBar = document.getElementById('progressBar');
+            
+            function updateProgress() {
+                const scrollTop = window.pageYOffset;
+                const docHeight = document.body.scrollHeight - window.innerHeight;
+                const scrollPercent = (scrollTop / docHeight) * 100;
+                progressBar.style.width = Math.min(scrollPercent, 100) + '%';
+            }
+            
+            window.addEventListener('scroll', updateProgress);
+            updateProgress();
+        }
+
+        function setupBackToTop() {
+            const backToTopButton = document.getElementById('backToTop');
+            
+            function toggleBackToTop() {
+                if (window.pageYOffset > 300) {
+                    backToTopButton.style.opacity = '1';
+                    backToTopButton.style.pointerEvents = 'auto';
+                } else {
+                    backToTopButton.style.opacity = '0';
+                    backToTopButton.style.pointerEvents = 'none';
+                }
+            }
+            
+            window.addEventListener('scroll', toggleBackToTop);
+            
+            backToTopButton.addEventListener('click', () => {
+                window.scrollTo({
+                    top: 0,
+                    behavior: 'smooth'
+                });
+            });
+        }
+
+        function setupFloatingToc() {
+            const tocLinks = document.querySelectorAll('.toc-item');
+            const sections = document.querySelectorAll('section');
+            
+            const observer = new IntersectionObserver(entries => {
+                entries.forEach(entry => {
+                    const id = entry.target.id;
+                    const tocLink = document.querySelector(`.toc-item[href="#${id}"]`);
+                    
+                    if (entry.isIntersecting) {
+                        tocLinks.forEach(link => link.classList.remove('active'));
+                        if (tocLink) tocLink.classList.add('active');
+                    }
+                });
+            }, { rootMargin: '-50% 0px -50% 0px' });
+            
+            sections.forEach(section => observer.observe(section));
+            
+            tocLinks.forEach(link => {
+                link.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    const target = document.querySelector(link.getAttribute('href'));
+                    if (target) {
+                        target.scrollIntoView({ behavior: 'smooth' });
+                    }
+                });
+            });
+        }
+        
+        function populateTimeline() {
+            const container = document.getElementById('timeline-container');
+            container.innerHTML = `<div class="absolute left-1/2 -translate-x-1/2 top-0 h-full w-0.5 bg-indigo-200"></div>`;
+            timelineData.forEach((item, index) => {
+                const alignClass = index % 2 === 0 ? 'md:text-right md:pr-16' : 'md:text-left md:pl-16 md:ml-auto';
+                const dotPos = index % 2 === 0 ? 'md:right-0 md:-mr-2.5' : 'md:left-0 md:-ml-2.5';
+                
+                const timelineItem = document.createElement('div');
+                timelineItem.className = 'timeline-item mb-8 w-full md:w-1/2 p-4 relative';
+                if(index % 2 !== 0) timelineItem.classList.add('md:ml-auto');
+
+                timelineItem.innerHTML = `
+                    <div class="absolute left-1/2 -translate-x-1/2 md:hidden top-4 h-4 w-4 rounded-full bg-indigo-500 border-4 border-white"></div>
+                    <div class="hidden md:block absolute top-6 ${dotPos} h-5 w-5 rounded-full bg-indigo-500 border-4 border-white"></div>
+                    <div class="bg-white rounded-lg shadow-md p-4 accordion-item hover:shadow-xl cursor-pointer">
+                        <div class="accordion-header flex justify-between items-center">
+                            <h3 class="text-xl font-bold text-indigo-600">${item.version}</h3>
+                             <svg class="w-5 h-5 text-indigo-500 transition-transform duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                        </div>
+                        <div class="accordion-content mt-2 text-slate-600">
+                             <ul class="list-disc list-inside space-y-1">
+                                ${item.features.map(f => `<li>${f}</li>`).join('')}
+                            </ul>
+                        </div>
+                    </div>
+                `;
+                container.appendChild(timelineItem);
+            });
+            setupAccordion('#timeline-container');
+        }
+
+        function populateJdk21Features() {
+            const container = document.getElementById('jdk21-features-container');
+            jdk21Features.forEach(feature => {
+                const card = document.createElement('div');
+                card.className = 'feature-card bg-slate-50 rounded-lg p-6 shadow-md hover:shadow-xl hover:-translate-y-1 accordion-item cursor-pointer';
+                card.innerHTML = `
+                    <div class="accordion-header">
+                        <div class="flex items-start justify-between">
+                            <div>
+                                <span class="text-3xl">${feature.icon}</span>
+                                <h3 class="text-xl font-bold mt-2">${feature.title}</h3>
+                            </div>
+                             <svg class="w-5 h-5 text-indigo-500 transition-transform duration-300 flex-shrink-0 mt-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                        </div>
+                        <p class="text-slate-600 mt-2">${feature.summary}</p>
+                    </div>
+                    <div class="accordion-content mt-4">
+                        <p class="text-slate-600 mb-4">${feature.details}</p>
+                        <div class="code-block">${feature.code.replace(/</g, "&lt;").replace(/>/g, "&gt;")}</div>
+                    </div>
+                `;
+                container.appendChild(card);
+            });
+             setupAccordion('#jdk21-features-container');
+        }
+
+        function populateComparison() {
+            const container = document.getElementById('comparison-container');
+            comparisonData.forEach(item => {
+                const div = document.createElement('div');
+                div.className = 'bg-white p-6 md:p-8 rounded-lg shadow-lg';
+                div.innerHTML = `
+                    <h3 class="text-2xl font-semibold text-center mb-8">${item.title}</h3>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+                        <div>
+                            <h4 class="text-lg font-medium mb-2 text-center text-slate-500">📜 JDK 8</h4>
+                            <div class="code-block">${item.jdk8.replace(/</g, "&lt;").replace(/>/g, "&gt;")}</div>
+                        </div>
+                        <div>
+                             <h4 class="text-lg font-medium mb-2 text-center text-indigo-600">✨ JDK 21</h4>
+                            <div class="code-block">${item.jdk21.replace(/</g, "&lt;").replace(/>/g, "&gt;")}</div>
+                        </div>
+                    </div>
+                `;
+                container.appendChild(div);
+            });
+        }
+        
+        function populateMigrationGuide() {
+            const container = document.getElementById('migration-guide-container');
+            migrationData.forEach(item => {
+                const div = document.createElement('div');
+                div.className = 'accordion-item border-b border-slate-200 last:border-b-0';
+                div.innerHTML = `
+                    <div class="accordion-header cursor-pointer p-4 flex justify-between items-center" aria-expanded="false">
+                        <h4 class="text-lg font-medium text-slate-700">${item.title}</h4>
+                         <svg class="w-5 h-5 text-indigo-500 transition-transform duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                    </div>
+                    <div class="accordion-content px-4 pb-4 text-slate-600">
+                        <p>${item.content}</p>
+                    </div>
+                `;
+                container.appendChild(div);
+            });
+            setupAccordion('#migration-guide-container');
+        }
+        
+        function createChart() {
+            const ctx = document.getElementById('featuresChart').getContext('2d');
+            new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: ['Language', 'API', 'Performance/GC', 'Concurrency', 'Tooling', 'Security'],
+                    datasets: [{
+                        label: 'Major Features Count (9-21)',
+                        data: [10, 8, 4, 3, 4, 1],
+                        backgroundColor: [
+                            'rgba(79, 70, 229, 0.6)',
+                            'rgba(99, 102, 241, 0.6)',
+                            'rgba(129, 140, 248, 0.6)',
+                            'rgba(165, 180, 252, 0.6)',
+                            'rgba(199, 210, 254, 0.6)',
+                            'rgba(224, 231, 255, 0.6)'
+                        ],
+                        borderColor: [
+                            'rgba(79, 70, 229, 1)',
+                            'rgba(99, 102, 241, 1)',
+                            'rgba(129, 140, 248, 1)',
+                            'rgba(165, 180, 252, 1)',
+                            'rgba(199, 210, 254, 1)',
+                            'rgba(224, 231, 255, 1)'
+                        ],
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    indexAxis: 'y',
+                    plugins: {
+                        legend: {
+                            display: false
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    return ` ${context.dataset.label}: ${context.raw}`;
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            beginAtZero: true,
+                            grid: {
+                                color: '#e2e8f0'
+                            }
+                        },
+                        y: {
+                           grid: {
+                                display: false
+                            }
+                        }
+                    }
+                }
+            });
+        }
+        
+        function setupNavigation() {
+            const links = document.querySelectorAll('.nav-link');
+            const sections = document.querySelectorAll('section');
+
+            const observer = new IntersectionObserver(entries => {
+                entries.forEach(entry => {
+                    if (entry.isIntersecting) {
+                        links.forEach(link => {
+                            link.classList.remove('active');
+                            if (link.getAttribute('href').substring(1) === entry.target.id) {
+                                link.classList.add('active');
+                            }
+                        });
+                    }
+                });
+            }, { rootMargin: '-50% 0px -50% 0px' });
+
+            sections.forEach(section => observer.observe(section));
+            
+            document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+                anchor.addEventListener('click', function (e) {
+                    e.preventDefault();
+                    document.querySelector(this.getAttribute('href')).scrollIntoView({
+                        behavior: 'smooth'
+                    });
+                    if (window.innerWidth < 768) {
+                       document.getElementById('mobile-menu').classList.add('hidden');
+                    }
+                });
+            });
+
+            document.getElementById('mobile-menu-button').addEventListener('click', () => {
+                document.getElementById('mobile-menu').classList.toggle('hidden');
+            });
+        }
+
+        populateTimeline();
+        populateJdk21Features();
+        populateComparison();
+        populateMigrationGuide();
+        createChart();
+        setupNavigation();
+        
+        // 新增功能初始化
+        addCopyButton();
+        setupProgressBar();
+        setupBackToTop();
+        setupFloatingToc();
+    });
+    </script>
+</body>
+</html>
