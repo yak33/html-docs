@@ -1,0 +1,1212 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>华熙生物关务系统与DHL API对接方案</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body { 
+            font-family: 'Microsoft YaHei', Arial, sans-serif; 
+            line-height: 1.6;
+        }
+        pre { 
+            background-color: #f8f9fa; 
+            padding: 15px; 
+            border-radius: 8px; 
+            border-left: 4px solid #007bff;
+            overflow-x: auto;
+            margin: 10px 0;
+        }
+        code { 
+            font-family: 'Consolas', 'Monaco', 'Courier New', monospace; 
+            background-color: #f1f3f4;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 0.9em;
+        }
+        pre code {
+            background-color: transparent;
+            padding: 0;
+        }
+        .table-container {
+            overflow-x: auto;
+            margin: 15px 0;
+        }
+        table {
+            border-collapse: collapse;
+            width: 100%;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            border-radius: 8px;
+            overflow: hidden;
+        }
+        th {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            font-weight: 600;
+            text-align: left;
+        }
+        td, th {
+            padding: 12px 15px;
+            border-bottom: 1px solid #e0e0e0;
+        }
+        tr:hover {
+            background-color: #f5f7fa;
+        }
+        .highlight-box {
+            background: linear-gradient(135deg, #667eea20, #764ba220);
+            border: 1px solid #667eea40;
+            border-radius: 10px;
+            padding: 20px;
+            margin: 20px 0;
+        }
+        .timeline-item {
+            border-left: 3px solid #007bff;
+            padding-left: 20px;
+            margin-bottom: 20px;
+            position: relative;
+        }
+        .timeline-item::before {
+            content: '';
+            position: absolute;
+            left: -6px;
+            top: 0;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background-color: #007bff;
+        }
+        .nav-menu {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: white;
+            padding: 15px;
+            border-radius: 10px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+            z-index: 1000;
+            max-width: 250px;
+        }
+        .nav-menu a {
+            display: block;
+            color: #333;
+            text-decoration: none;
+            padding: 5px 0;
+            border-bottom: 1px solid #eee;
+            font-size: 0.9em;
+        }
+        .nav-menu a:hover {
+            color: #007bff;
+        }
+        @media (max-width: 768px) {
+            .nav-menu {
+                display: none;
+            }
+        }
+    </style>
+</head>
+<body class="bg-gray-100 p-6">
+    <!-- 导航菜单 -->
+    <div class="nav-menu">
+        <h3 class="text-lg font-semibold mb-3 text-gray-800">快速导航</h3>
+        <a href="#overview">项目概述</a>
+        <a href="#preparation">准备阶段</a>
+        <a href="#authentication">认证实现</a>
+        <a href="#shipment-module">运单模块</a>
+        <a href="#declaration-module">申报单模块</a>
+        <a href="#testing">测试部署</a>
+        <a href="#timeline">开发时间表</a>
+        <a href="#security">安全性能</a>
+    </div>
+    
+    <div class="max-w-5xl mx-auto bg-white p-8 rounded-lg shadow">
+        <h1 class="text-4xl font-bold mb-8 text-center bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">华熙生物关务系统与DHL API对接方案</h1>
+        <div class="highlight-box" id="overview">
+            <p class="text-gray-700 text-lg leading-relaxed">以下是为华熙生物的关务系统与DHL的API（运单和DPS申报接口）进行对接的详细方案和开发计划。方案涵盖运单模块和申报单模块，基于REST接口调用，包含前后端开发步骤和参数要求。本文档完善了运单模块的预约取件、查询预估运费和快件跟踪接口。</p>
+        </div>
+
+        <h2 class="text-2xl font-semibold mt-8 mb-6 text-blue-600" id="key-points">🎯 关键点</h2>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+            <div class="bg-blue-50 p-6 rounded-lg border-l-4 border-blue-500">
+                <h3 class="font-semibold text-blue-800 mb-2">📦 运单模块</h3>
+                <p class="text-blue-700">实现制作运单、预约取件、查询预估运费和快件跟踪功能，调用MyDHL API。</p>
+            </div>
+            <div class="bg-green-50 p-6 rounded-lg border-l-4 border-green-500">
+                <h3 class="font-semibold text-green-800 mb-2">📋 申报单模块</h3>
+                <p class="text-green-700">格式化关务系统报关单数据，通过DPS申报API推送给DHL。</p>
+            </div>
+            <div class="bg-purple-50 p-6 rounded-lg border-l-4 border-purple-500">
+                <h3 class="font-semibold text-purple-800 mb-2">🔐 认证方式</h3>
+                <p class="text-purple-700">MyDHL API使用基本认证，DPS申报API使用DPS Token认证。</p>
+            </div>
+            <div class="bg-orange-50 p-6 rounded-lg border-l-4 border-orange-500">
+                <h3 class="font-semibold text-orange-800 mb-2">⏱️ 开发时间</h3>
+                <p class="text-orange-700">预计总周期12-14周，包含完整的开发、测试和部署流程。</p>
+            </div>
+        </div>
+
+        <h2 class="text-3xl font-semibold mt-12 mb-6 text-blue-600" id="overview-plan">🚀 总体对接方案</h2>
+        <div class="highlight-box">
+            <p class="text-lg text-gray-700">对接方案分为运单模块和申报单模块，涵盖认证、API调用、前端设计、测试和部署。</p>
+        </div>
+
+        <div class="timeline-item" id="preparation">
+            <h3 class="text-xl font-semibold mb-3 text-blue-600">1️⃣ 准备阶段</h3>
+            <div class="bg-gray-50 p-4 rounded-lg mb-4">
+                <p class="font-semibold text-gray-800 mb-2">🎯 目标：获取资源，搭建开发和测试环境</p>
+                <ul class="list-disc pl-6 space-y-2">
+                    <li>从DHL获取MyDHL API和DPS申报API文档及测试/生产环境凭证</li>
+                    <li>搭建开发环境，使用Java REST客户端库（如Apache HttpClient、OkHttp或Spring RestTemplate）和测试工具（如Postman、SOAPUI）</li>
+                </ul>
+            </div>
+            <span class="inline-block bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-sm font-semibold">⏱️ 时间：1周</span>
+        </div>
+
+        <div class="timeline-item" id="authentication">
+            <h3 class="text-xl font-semibold mb-3 text-blue-600">2️⃣ 认证实现</h3>
+        <p><strong>MyDHL API认证</strong>：</p>
+        <ul class="list-disc pl-6 mb-4">
+            <li>使用基本认证（Basic Auth），将用户名和密码Base64编码，设置在请求头<code>Authorization</code>字段。</li>
+            <li>基础认证配置（Java）：
+                <pre><code>// Maven依赖
+// <dependency>
+//     <groupId>org.apache.httpcomponents</groupId>
+//     <artifactId>httpclient</artifactId>
+//     <version>4.5.13</version>
+// </dependency>
+
+import org.apache.http.impl.client.CloseableHttpClient;
+import org.apache.http.impl.client.HttpClients;
+import org.apache.http.client.methods.HttpPost;
+import org.apache.http.entity.StringEntity;
+import org.apache.http.Header;
+import org.apache.http.message.BasicHeader;
+import java.util.Base64;
+
+public class DhlApiClient {
+    private static final String TEST_BASE_URL = "https://express.api.dhl.com/mydhlapi/test";
+    private static final String PROD_BASE_URL = "https://express.api.dhl.com/mydhlapi";
+    
+    private String username = "your_test_username";
+    private String password = "your_test_password";
+    
+    // 生成Basic Auth Header
+    private String getBasicAuthHeader() {
+        String credentials = username + ":" + password;
+        return "Basic " + Base64.getEncoder().encodeToString(credentials.getBytes());
+    }
+    
+    // 获取通用请求头
+    public Header[] getCommonHeaders() {
+        return new Header[]{
+            new BasicHeader("Authorization", getBasicAuthHeader()),
+            new BasicHeader("Content-Type", "application/json"),
+            new BasicHeader("Accept", "application/json"),
+            new BasicHeader("Message-Reference", java.util.UUID.randomUUID().toString())
+        };
+    }
+}</code></pre>
+            </li>
+        </ul>
+        <p><strong>DPS申报API认证</strong>：</p>
+        <ul class="list-disc pl-6 mb-4">
+            <li><strong>完整认证URL</strong>：<code>https://api.dhl.com/dps-auth-server/api/gateway-token/generate</code></li>
+            <li><strong>Java实现示例</strong>：
+                <pre><code>import com.fasterxml.jackson.databind.ObjectMapper;
+import org.apache.http.client.methods.HttpPost;
+import org.apache.http.entity.StringEntity;
+import org.apache.http.impl.client.CloseableHttpClient;
+import org.apache.http.impl.client.HttpClients;
+import org.apache.http.util.EntityUtils;
+import org.apache.http.HttpResponse;
+
+public class DpsAuthClient {
+    private static final String DPS_AUTH_URL = "https://api.dhl.com/dps-auth-server/api/gateway-token/generate";
+    
+    public class TokenRequest {
+        public String consumerCode; // DHL提供的消费者代码
+        public String key; // DHL提供的密钥
+        
+        public TokenRequest(String consumerCode, String key) {
+            this.consumerCode = consumerCode;
+            this.key = key;
+        }
+    }
+    
+    public class TokenResponse {
+        public String access_token;
+        public String token_type;
+        public int expires_in; // 秒数，通常是3600（60分钟）
+        public String scope;
+    }
+    
+    // 获取DPS访问Token
+    public String getDpsToken(String consumerCode, String key) throws Exception {
+        CloseableHttpClient client = HttpClients.createDefault();
+        HttpPost post = new HttpPost(DPS_AUTH_URL);
+        
+        // 设置请求头
+        post.setHeader("Content-Type", "application/json");
+        post.setHeader("Accept", "application/json");
+        
+        // 设置请求体
+        TokenRequest request = new TokenRequest(consumerCode, key);
+        ObjectMapper mapper = new ObjectMapper();
+        String requestJson = mapper.writeValueAsString(request);
+        post.setEntity(new StringEntity(requestJson, "UTF-8"));
+        
+        HttpResponse response = client.execute(post);
+        String responseBody = EntityUtils.toString(response.getEntity());
+        
+        if (response.getStatusLine().getStatusCode() == 200) {
+            TokenResponse tokenResponse = mapper.readValue(responseBody, TokenResponse.class);
+            return tokenResponse.access_token;
+        } else {
+            throw new RuntimeException("Failed to get DPS token: " + responseBody);
+        }
+    }
+    
+    // Token有效期管理
+    private String cachedToken;
+    private long tokenExpiryTime;
+    
+    public String getValidToken(String consumerCode, String key) throws Exception {
+        long currentTime = System.currentTimeMillis();
+        
+        // 如果Token不存在或即将过期（提前5分钟刷新），重新获取
+        if (cachedToken == null || currentTime >= (tokenExpiryTime - 300000)) {
+            cachedToken = getDpsToken(consumerCode, key);
+            tokenExpiryTime = currentTime + 3600000; // 60分钟后过期
+        }
+        
+        return cachedToken;
+    }
+}</code></pre>
+            </li>
+            <li><strong>请求示例</strong>：
+                <pre><code>{
+    "consumerCode": "HYALURONIC_CUSTOMS",
+    "key": "your_secret_key_from_dhl"
+}</code></pre>
+            </li>
+            <li><strong>响应示例</strong>：
+                <pre><code>{
+    "access_token": "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9...",
+    "token_type": "Bearer",
+    "expires_in": 3600,
+    "scope": "dps-declaration"
+}</code></pre>
+            </li>
+        </ul>
+        <p><strong>时间</strong>：1周</p>
+
+        <h3 class="text-xl font-semibold mt-4 mb-2">3. 运单模块开发</h3>
+        <p><strong>目标</strong>：实现制作运单、预约取件、查询预估运费和快件跟踪功能，调用MyDHL API的多个端点。</p>
+
+        <h4 class="text-lg font-semibold mt-4 mb-2">3.1 后端开发</h4>
+        <p><strong>API客户端设置</strong>：使用Java Apache HttpClient库，配置如下环境URL：</p>
+        <ul class="list-disc pl-6 mb-4">
+            <li><strong>测试环境</strong>：<code>https://express.api.dhl.com/mydhlapi/test</code></li>
+            <li><strong>生产环境</strong>：<code>https://express.api.dhl.com/mydhlapi</code></li>
+        </ul>
+
+        <h5 class="text-md font-semibold mt-4 mb-2">3.1.1 创建运单</h5>
+        <ul class="list-disc pl-6 mb-4">
+            <li><strong>完整URL</strong>：<code>https://express.api.dhl.com/mydhlapi/test/shipments</code>（测试环境）</li>
+            <li><strong>生产环境URL</strong>：<code>https://express.api.dhl.com/mydhlapi/shipments</code></li>
+            <li><strong>方法</strong>：<code>POST</code></li>
+            <li>请求头：
+                <div class="table-container">
+                    <table>
+                        <tr><th>字段</th><th>类型</th><th>必填</th><th>描述</th></tr>
+                        <tr><td>content-type</td><td>String</td><td>✅ 是</td><td>application/json</td></tr>
+                        <tr><td>Authorization</td><td>String</td><td>✅ 是</td><td>Basic Auth凭证</td></tr>
+                        <tr><td>Message-Reference</td><td>String</td><td>⚠️ 推荐</td><td>消息唯一标识</td></tr>
+                    </table>
+                </div>
+            </li>
+            <li><strong>完整Java实现示例</strong>：
+                <pre><code>import com.fasterxml.jackson.databind.ObjectMapper;
+import org.apache.http.client.methods.HttpPost;
+import org.apache.http.entity.StringEntity;
+import org.apache.http.impl.client.CloseableHttpClient;
+import org.apache.http.impl.client.HttpClients;
+import org.apache.http.util.EntityUtils;
+import org.apache.http.HttpResponse;
+
+public class ShipmentService {
+    private static final String SHIPMENT_URL = "https://express.api.dhl.com/mydhlapi/test/shipments";
+    private DhlApiClient apiClient;
+    
+    // 根据DHL官方文档的完整请求数据结构
+    public class ShipmentRequest {
+        public String productCode = "P"; // P=DHL Express Worldwide
+        public String localProductCode = "P";
+        public String plannedShippingDateAndTime; // 格式: "2025-06-10T16:45:00GMT+08:00"
+        public PickupInfo pickup;
+        public Account[] accounts;
+        public ValueAddedService[] valueAddedServices;
+        public OutputImageProperties outputImageProperties;
+        public CustomerReference[] customerReferences;
+        public boolean getOptionalInformation = false;
+        public CustomerDetails customerDetails;
+        public Content content;
+        
+        public static class PickupInfo {
+            public boolean isRequested = false;
+        }
+        
+        public static class ValueAddedService {
+            public String serviceCode; // "WY" = DHL自带包装，"II" = 保险等
+        }
+        
+        public static class OutputImageProperties {
+            public int printerDPI = 300;
+            public String encodingFormat = "pdf";
+            public ImageOption[] imageOptions;
+        }
+        
+        public static class ImageOption {
+            public String typeCode; // "invoice", "waybillDoc", "label"
+            public String templateName;
+            public String languageCode = "eng";
+            public boolean hideAccountNumber = false;
+            public int numberOfCopies = 1;
+            public boolean isRequested = true;
+        }
+        
+        public static class CustomerReference {
+            public String value;
+            public String typeCode = "CU"; // Customer Reference
+        }
+        
+        // 客户详情需要包含更多必需字段
+        public static class CustomerDetails {
+            public PartyDetails shipperDetails;
+            public PartyDetails receiverDetails;
+            public PartyDetails buyerDetails; // 可选
+            public PartyDetails importerDetails; // 可选
+            public PartyDetails exporterDetails; // 可选
+        }
+        
+        public static class PartyDetails {
+            public PostalAddress postalAddress;
+            public ContactInformation contactInformation;
+            public RegistrationNumber[] registrationNumbers; // VAT等税号
+            public String typeCode = "business"; // "business" or "private"
+        }
+        
+        public static class PostalAddress {
+            public String cityName;
+            public String countryCode;
+            public String postalCode;
+            public String addressLine1;
+            public String addressLine2;
+            public String addressLine3;
+        }
+        
+        public static class ContactInformation {
+            public String phone;
+            public String mobilePhone;
+            public String companyName;
+            public String fullName;
+            public String email;
+        }
+        
+        public static class RegistrationNumber {
+            public String number;
+            public String issuerCountryCode;
+            public String typeCode; // "VAT", "EOR", "SDT", "IOSS"
+        }
+        
+        public static class Content {
+            public ExportDeclaration exportDeclaration;
+            public String unitOfMeasurement = "metric";
+            public boolean isCustomsDeclarable = true;
+            public String incoterm = "DAP";
+            public String description;
+            public Package[] packages;
+            public String declaredValueCurrency = "USD";
+            public double declaredValue;
+        }
+        
+        public static class ExportDeclaration {
+            public String exportReasonType = "permanent";
+            public String placeOfIncoterm;
+            public Invoice invoice;
+            public Remark[] remarks;
+            public String packageMarks;
+            public LineItem[] lineItems;
+            public CustomsDocument[] customsDocuments;
+            public AdditionalCharge[] additionalCharges;
+        }
+        
+        public static class Invoice {
+            public String number;
+            public String date;
+            public String signatureName;
+            public String signatureTitle;
+            public String signatureImage;
+            public CustomerReference[] customerReferences;
+        }
+        
+        public static class LineItem {
+            public int number;
+            public String description;
+            public double price;
+            public Quantity quantity;
+            public CommodityCode[] commodityCodes;
+            public String manufacturerCountry;
+            public Weight weight;
+            public CustomerReference[] customerReferences;
+            public CustomsDocument[] customsDocuments;
+        }
+        
+        public static class Quantity {
+            public double value;
+            public String unitOfMeasurement = "PCS";
+        }
+        
+        public static class CommodityCode {
+            public String typeCode; // "outbound", "inbound"
+            public String value; // HS编码
+        }
+        
+        public static class Weight {
+            public double netValue;
+            public double grossValue;
+        }
+    }
+    
+    public String createShipment(ShipmentRequest request) throws Exception {
+        CloseableHttpClient client = HttpClients.createDefault();
+        HttpPost post = new HttpPost(SHIPMENT_URL);
+        
+        // 设置请求头
+        post.setHeaders(apiClient.getCommonHeaders());
+        
+        // 设置请求体
+        ObjectMapper mapper = new ObjectMapper();
+        String requestJson = mapper.writeValueAsString(request);
+        post.setEntity(new StringEntity(requestJson, "UTF-8"));
+        
+        HttpResponse response = client.execute(post);
+        String responseBody = EntityUtils.toString(response.getEntity());
+        
+        return responseBody;
+    }
+}</code></pre>
+            </li>
+            <li><strong>华熙生物实际业务请求示例</strong>：
+                <pre><code>{
+    "productCode": "P",
+    "localProductCode": "P",
+    "plannedShippingDateAndTime": "2025-06-10T16:45:00GMT+08:00",
+    "pickup": {
+        "isRequested": false
+    },
+    "accounts": [
+        {
+            "number": "123456789",
+            "typeCode": "shipper"
+        }
+    ],
+    "valueAddedServices": [
+        {
+            "serviceCode": "WY"
+        }
+    ],
+    "outputImageProperties": {
+        "printerDPI": 300,
+        "encodingFormat": "pdf",
+        "imageOptions": [
+            {
+                "typeCode": "invoice",
+                "templateName": "COMMERCIAL_INVOICE_P_10",
+                "languageCode": "eng",
+                "isRequested": true
+            },
+            {
+                "typeCode": "waybillDoc",
+                "hideAccountNumber": false,
+                "templateName": "ARCH_8X4",
+                "numberOfCopies": 1,
+                "isRequested": true
+            },
+            {
+                "typeCode": "label",
+                "templateName": "ECOM26_84_001"
+            }
+        ]
+    },
+    "customerReferences": [
+        {
+            "value": "HYALURONIC-2025-001",
+            "typeCode": "CU"
+        }
+    ],
+    "getOptionalInformation": false,
+    "customerDetails": {
+        "shipperDetails": {
+            "postalAddress": {
+                "cityName": "SHANGHAI",
+                "countryCode": "CN",
+                "postalCode": "200000",
+                "addressLine1": "华熙生物科技股份有限公司",
+                "addressLine2": "黄浦区淮海路123号",
+                "addressLine3": "1号楼603室"
+            },
+            "contactInformation": {
+                "phone": "8621-12345678",
+                "mobilePhone": "13800138000",
+                "companyName": "华熙生物科技股份有限公司",
+                "fullName": "张经理",
+                "email": "export@hyaluronic.com"
+            },
+            "registrationNumbers": [
+                {
+                    "number": "VAT123456789",
+                    "issuerCountryCode": "CN",
+                    "typeCode": "VAT"
+                }
+            ],
+            "typeCode": "business"
+        },
+        "receiverDetails": {
+            "postalAddress": {
+                "cityName": "NEW YORK",
+                "countryCode": "US",
+                "postalCode": "10001",
+                "addressLine1": "ABC Beauty Company",
+                "addressLine2": "123 Main Street",
+                "addressLine3": "Suite 456"
+            },
+            "contactInformation": {
+                "phone": "12125550123",
+                "mobilePhone": "19175550123",
+                "companyName": "ABC Beauty Company",
+                "fullName": "John Smith",
+                "email": "import@abcbeauty.com"
+            },
+            "registrationNumbers": [
+                {
+                    "issuerCountryCode": "US",
+                    "number": "US123456789",
+                    "typeCode": "EIN"
+                }
+            ],
+            "typeCode": "business"
+        }
+    },
+    "content": {
+        "exportDeclaration": {
+            "exportReasonType": "permanent",
+            "placeOfIncoterm": "SHANGHAI",
+            "invoice": {
+                "number": "HY-INV-2025-001",
+                "date": "2025-06-07",
+                "signatureName": "张经理",
+                "signatureTitle": "出口部经理"
+            },
+            "remarks": [
+                {
+                    "value": "透明质酸钠凝胶，医用级别"
+                },
+                {
+                    "value": "请保持干燥，避免高温"
+                }
+            ],
+            "packageMarks": "HYALURONIC ACID GEL - MEDICAL GRADE",
+            "lineItems": [
+                {
+                    "number": 1,
+                    "description": "透明质酸钠凝胶注射剂",
+                    "price": 500.00,
+                    "quantity": {
+                        "value": 10,
+                        "unitOfMeasurement": "PCS"
+                    },
+                    "commodityCodes": [
+                        {
+                            "typeCode": "outbound",
+                            "value": "3824.99.9990"
+                        },
+                        {
+                            "typeCode": "inbound",
+                            "value": "3824.99.9990"
+                        }
+                    ],
+                    "manufacturerCountry": "CN",
+                    "weight": {
+                        "netValue": 0.5,
+                        "grossValue": 0.6
+                    }
+                }
+            ]
+        },
+        "unitOfMeasurement": "metric",
+        "isCustomsDeclarable": true,
+        "incoterm": "DAP",
+        "description": "透明质酸钠凝胶医疗产品",
+        "packages": [
+            {
+                "customerReferences": [
+                    {
+                        "value": "PKG-001",
+                        "typeCode": "CU"
+                    }
+                ],
+                "weight": 5.0,
+                "dimensions": {
+                    "length": 30,
+                    "width": 20,
+                    "height": 15
+                }
+            }
+        ],
+        "declaredValueCurrency": "USD",
+        "declaredValue": 5000.00
+    }
+}</code></pre>
+            </li>
+            <li><strong>DHL官方响应示例</strong>：
+                <pre><code>{
+    "shipmentTrackingNumber": "1234567890",
+    "trackingUrl": "https://express.api.dhl.com/mydhlapi/shipments/1234567890/tracking",
+    "packages": [
+        {
+            "referenceNumber": 1,
+            "trackingNumber": "JD014612345535416785",
+            "trackingUrl": "https://express.api.dhl.com/mydhlapi/shipments/1234567890/tracking?pieceTrackingNumber=JD014612345535416785"
+        }
+    ],
+    "documents": [
+        {
+            "imageFormat": "PDF",
+            "content": "base64编码的PDF内容",
+            "typeCode": "label"
+        },
+        {
+            "imageFormat": "PDF",
+            "content": "base64编码的PDF内容",
+            "typeCode": "invoice"
+        }
+    ],
+    "warnings": []
+}</code></pre>
+            </li>
+            <li><strong>响应处理要点</strong>：
+                <ul class="list-disc pl-6 mt-2">
+                    <li>提取运单号：<code>shipmentTrackingNumber</code></li>
+                    <li>保存PDF文档：解码<code>documents</code>中的base64内容</li>
+                    <li>处理警告信息：检查<code>warnings</code>数组</li>
+                    <li>包裹跟踪：保存每个包裹的独立跟踪号</li>
+                </ul>
+            </li>
+        </ul>
+
+        <h5 class="text-md font-semibold mt-4 mb-2">3.1.2 预约取件</h5>
+        <ul class="list-disc pl-6 mb-4">
+            <li>端点：<code>POST /pickup-requests</code></li>
+            <li>请求头：同创建运单。</li>
+            <li>请求体：
+                <table class="w-full border-collapse border mb-4">
+                    <tr class="bg-gray-200"><th class="border p-2">字段</th><th class="border p-2">类型</th><th class="border p-2">必填</th><th class="border p-2">描述</th></tr>
+                    <tr><td>pickupDetails</td><td>Object</td><td>是</td><td>取件地址和联系人</td></tr>
+                    <tr><td>plannedPickupDateAndTime</td><td>String</td><td>是</td><td>取件时间（ISO 8601格式）</td></tr>
+                    <tr><td>accounts</td><td>Array</td><td>是</td><td>支付账户</td></tr>
+                    <tr><td>shipmentReferences</td><td>Array</td><td>可选</td><td>关联运单号</td></tr>
+                </table>
+            </li>
+            <li>请求体示例：
+                <pre><code>{
+    "pickupDetails": {
+        "postalAddress": {
+            "countryCode": "CN",
+            "postalCode": "200000",
+            "cityName": "Shanghai",
+            "addressLine1": "123 Example Street"
+        },
+        "contactInformation": {
+            "fullName": "John Doe",
+            "phone": "+861234567890"
+        }
+    },
+    "plannedPickupDateAndTime": "2025-06-10T09:00:00+08:00",
+    "accounts": [
+        {
+            "typeCode": "shipper",
+            "number": "123456"
+        }
+    ],
+    "shipmentReferences": [
+        {
+            "value": "7902324220",
+            "typeCode": "shipmentTrackingNumber"
+        }
+    ]
+}</code></pre>
+            </li>
+            <li>响应：返回取件确认号和状态。</li>
+            <li>实现：若运单创建时未包含取件信息，调用此端点；确保时间格式符合ISO 8601。</li>
+        </ul>
+
+        <h5 class="text-md font-semibold mt-4 mb-2">3.1.3 查询预估运费</h5>
+        <ul class="list-disc pl-6 mb-4">
+            <li>端点：<code>POST /rates</code>（复杂货件）或<code>GET /rates</code>（简单货件）</li>
+            <li>请求头：同创建运单。</li>
+            <li>请求体（POST）：
+                <table class="w-full border-collapse border mb-4">
+                    <tr class="bg-gray-200"><th class="border p-2">字段</th><th class="border p-2">类型</th><th class="border p-2">必填</th><th class="border p-2">描述</th></tr>
+                    <tr><td>customerDetails</td><td>Object</td><td>是</td><td>发货人/收货人信息</td></tr>
+                    <tr><td>accounts</td><td>Array</td><td>是</td><td>支付账户</td></tr>
+                    <tr><td>packages</td><td>Array</td><td>是</td><td>包裹详情</td></tr>
+                    <tr><td>plannedShippingDateAndTime</td><td>String</td><td>是</td><td>计划发货时间</td></tr>
+                </table>
+            </li>
+            <li>请求体示例（POST）：
+                <pre><code>{
+    "customerDetails": {
+        "shipperDetails": {
+            "countryCode": "CN",
+            "postalCode": "200000",
+            "cityName": "Shanghai"
+        },
+        "receiverDetails": {
+            "countryCode": "US",
+            "postalCode": "10001",
+            "cityName": "New York"
+        }
+    },
+    "accounts": [
+        {
+            "typeCode": "shipper",
+            "number": "123456"
+        }
+    ],
+    "packages": [
+        {
+            "weight": 5.0,
+            "dimensions": {
+                "length": 30.0,
+                "width": 20.0,
+                "height": 15.0
+            }
+        }
+    ],
+    "plannedShippingDateAndTime": "2025-06-10T09:00:00+08:00",
+    "unitOfMeasurement": "metric",
+    "isCustomsDeclarable": true
+}</code></pre>
+            </li>
+            <li>GET请求示例：
+                <pre><code>GET /rates?shipperCountryCode=CN&shipperPostalCode=200000&receiverCountryCode=US&receiverPostalCode=10001&weight=5.0&length=30.0&width=20.0&height=15.0&unitOfMeasurement=metric&isCustomsDeclarable=true</code></pre>
+            </li>
+            <li>响应：返回可用服务和预估费用列表。</li>
+            <li>实现：优先使用POST端点处理复杂货件；解析响应中的服务代码和费用。</li>
+        </ul>
+
+        <h5 class="text-md font-semibold mt-4 mb-2">3.1.4 快件跟踪</h5>
+        <ul class="list-disc pl-6 mb-4">
+            <li>端点：<code>GET /track/shipments</code></li>
+            <li>请求参数：
+                <table class="w-full border-collapse border mb-4">
+                    <tr class="bg-gray-200"><th class="border p-2">字段</th><th class="border p-2">类型</th><th class="border p-2">必填</th><th class="border p-2">描述</th></tr>
+                    <tr><td>trackingNumber</td><td>String</td><td>是</td><td>运单号</td></tr>
+                    <tr><td>language</td><td>String</td><td>可选</td><td>响应语言（默认en）</td></tr>
+                </table>
+            </li>
+            <li>请求示例：
+                <pre><code>GET /track/shipments?trackingNumber=7902324220&language=zh</code></pre>
+            </li>
+            <li>响应示例：
+                <pre><code>{
+    "shipments": [
+        {
+            "trackingNumber": "7902324220",
+            "status": "In Transit",
+            "events": [
+                {
+                    "date": "2025-06-10T10:00:00+08:00",
+                    "description": "Picked up",
+                    "location": "Shanghai, CN"
+                },
+                {
+                    "date": "2025-06-11T12:00:00+08:00",
+                    "description": "In transit",
+                    "location": "Hong Kong, HK"
+                }
+            ]
+        }
+    ]
+}</code></pre>
+            </li>
+            <li>实现：解析跟踪事件，提取状态、时间和地点信息。</li>
+        </ul>
+        <p><strong>关键注意事项</strong>：</p>
+        <ul class="list-disc pl-6 mb-4">
+            <li><strong>必需字段验证</strong>：确保所有必填字段都有值，特别是地址、联系信息和税号</li>
+            <li><strong>格式要求</strong>：时间格式必须为<code>YYYY-MM-DDTHH:MM:SSGMT+TZ</code></li>
+            <li><strong>文档生成</strong>：明确指定需要的文档类型（标签、发票、运单）</li>
+            <li><strong>货币代码</strong>：使用标准的ISO 4217货币代码</li>
+            <li><strong>商品编码</strong>：使用准确的HS编码，区分出境和入境编码</li>
+        </ul>
+        <p><strong>时间</strong>：5周（Java API客户端封装1.5周，创建运单1.5周，预约取件0.5周，运费查询0.5周，跟踪0.5周，优化和错误处理0.5周）</p>
+
+        <h4 class="text-lg font-semibold mt-4 mb-2">3.2 前端开发</h4>
+        <p><strong>用户界面设计</strong>：</p>
+        <ul class="list-disc pl-6 mb-4">
+            <li><strong>运单创建</strong>：表单包含发货人/收货人信息、包裹详情、产品代码。</li>
+            <li><strong>预约取件</strong>：输入取件时间、地址和联系人，支持关联运单号。</li>
+            <li><strong>运费查询</strong>：输入货件信息，显示可用服务和费用。</li>
+            <li><strong>跟踪查询</strong>：输入运单号，显示跟踪状态和事件时间线。</li>
+        </ul>
+        <p><strong>与后端集成</strong>：使用AJAX调用后端API，显示运单号、取件确认、运费估算和跟踪信息。</p>
+        <p><strong>示例前端代码</strong>：</p>
+        <pre><code>&lt;!DOCTYPE html&gt;
+&lt;html&gt;
+&lt;head&gt;
+    &lt;title&gt;运单模块前端&lt;/title&gt;
+    &lt;script src="https://cdn.tailwindcss.com"&gt;&lt;/script&gt;
+    &lt;script src="https://code.jquery.com/jquery-3.6.0.min.js"&gt;&lt;/script&gt;
+&lt;/head&gt;
+&lt;body class="bg-gray-100 p-6"&gt;
+    &lt;div class="max-w-4xl mx-auto bg-white p-6 rounded-lg shadow"&gt;
+        &lt;h1 class="text-2xl font-bold mb-4"&gt;运单管理&lt;/h1&gt;
+        &lt;!-- 运单创建 --&gt;
+        &lt;div class="mb-6"&gt;
+            &lt;h2 class="text-xl font-semibold mb-2"&gt;创建运单&lt;/h2&gt;
+            &lt;div class="grid grid-cols-2 gap-4"&gt;
+                &lt;div&gt;
+                    &lt;label class="block text-sm font-medium"&gt;发货人邮编&lt;/label&gt;
+                    &lt;input id="shipperPostalCode" type="text" class="mt-1 block w-full border rounded p-2"&gt;
+                &lt;/div&gt;
+                &lt;div&gt;
+                    &lt;label class="block text-sm font-medium"&gt;收货人邮编&lt;/label&gt;
+                    &lt;input id="receiverPostalCode" type="text" class="mt-1 block w-full border rounded p-2"&gt;
+                &lt;/div&gt;
+                &lt;div&gt;
+                    &lt;label class="block text-sm font-medium"&gt;包裹重量 (kg)&lt;/label&gt;
+                    &lt;input id="weight" type="number" class="mt-1 block w-full border rounded p-2"&gt;
+                &lt;/div&gt;
+                &lt;div&gt;
+                    &lt;label class="block text-sm font-medium"&gt;产品代码&lt;/label&gt;
+                    &lt;input id="productCode" type="text" class="mt-1 block w-full border rounded p-2" value="P"&gt;
+                &lt;/div&gt;
+            &lt;/div&gt;
+            &lt;button id="createShipment" class="mt-4 bg-blue-500 text-white px-4 py-2 rounded"&gt;创建运单&lt;/button&gt;
+            &lt;div id="shipmentResult" class="mt-4"&gt;&lt;/div&gt;
+        &lt;/div&gt;
+        &lt;!-- 预约取件 --&gt;
+        &lt;div class="mb-6"&gt;
+            &lt;h2 class="text-xl font-semibold mb-2"&gt;预约取件&lt;/h2&gt;
+            &lt;div class="grid grid-cols-2 gap-4"&gt;
+                &lt;div&gt;
+                    &lt;label class="block text-sm font-medium"&gt;取件地址&lt;/label&gt;
+                    &lt;input id="pickupAddress" type="text" class="mt-1 block w-full border rounded p-2"&gt;
+                &lt;/div&gt;
+                &lt;div&gt;
+                    &lt;label class="block text-sm font-medium"&gt;取件时间&lt;/label&gt;
+                    &lt;input id="pickupTime" type="datetime-local" class="mt-1 block w-full border rounded p-2"&gt;
+                &lt;/div&gt;
+            &lt;/div&gt;
+            &lt;button id="schedulePickup" class="mt-4 bg-blue-500 text-white px-4 py-2 rounded"&gt;预约取件&lt;/button&gt;
+            &lt;div id="pickupResult" class="mt-4"&gt;&lt;/div&gt;
+        &lt;/div&gt;
+        &lt;!-- 运费查询 --&gt;
+        &lt;div class="mb-6"&gt;
+            &lt;h2 class="text-xl font-semibold mb-2"&gt;查询运费&lt;/h2&gt;
+            &lt;div class="grid grid-cols-2 gap-4"&gt;
+                &lt;div&gt;
+                    &lt;label class="block text-sm font-medium"&gt;发货人邮编&lt;/label&gt;
+                    &lt;input id="rateShipperPostalCode" type="text" class="mt-1 block w-full border rounded p-2"&gt;
+                &lt;/div&gt;
+                &lt;div&gt;
+                    &lt;label class="block text-sm font-medium"&gt;收货人邮编&lt;/label&gt;
+                    &lt;input id="rateReceiverPostalCode" type="text" class="mt-1 block w-full border rounded p-2"&gt;
+                &lt;/div&gt;
+            &lt;/div&gt;
+            &lt;button id="getRates" class="mt-4 bg-blue-500 text-white px-4 py-2 rounded"&gt;查询运费&lt;/button&gt;
+            &lt;div id="rateResult" class="mt-4"&gt;&lt;/div&gt;
+        &lt;/div&gt;
+        &lt;!-- 跟踪查询 --&gt;
+        &lt;div&gt;
+            &lt;h2 class="text-xl font-semibold mb-2"&gt;快件跟踪&lt;/h2&gt;
+            &lt;div&gt;
+                &lt;label class="block text-sm font-medium"&gt;运单号&lt;/label&gt;
+                &lt;input id="trackingNumber" type="text" class="mt-1 block w-full border rounded p-2"&gt;
+            &lt;/div&gt;
+            &lt;button id="trackShipment" class="mt-4 bg-blue-500 text-white px-4 py-2 rounded"&gt;查询跟踪&lt;/button&gt;
+            &lt;div id="trackResult" class="mt-4"&gt;&lt;/div&gt;
+        &lt;/div&gt;
+    &lt;/div&gt;
+    &lt;script&gt;
+        // 创建运单
+        $('#createShipment').click(function() {
+            const data = {
+                customerDetails: {
+                    shipperDetails: { postalCode: $('#shipperPostalCode').val(), countryCode: 'CN', cityName: 'Shanghai' },
+                    receiverDetails: { postalCode: $('#receiverPostalCode').val(), countryCode: 'US', cityName: 'New York' }
+                },
+                accounts: [{ typeCode: 'shipper', number: '123456' }],
+                content: {
+                    declaredValue: 100.00,
+                    isCustomsDeclarable: true,
+                    unitOfMeasurement: 'metric',
+                    packages: [{ weight: parseFloat($('#weight').val()), dimensions: { length: 30.0, width: 20.0, height: 15.0 } }],
+                    productCode: $('#productCode').val()
+                }
+            };
+            $.ajax({
+                url: '/api/shipments',
+                method: 'POST',
+                headers: { 'Authorization': 'Basic REPLACE_BASIC_AUTH', 'content-type': 'application/json' },
+                data: JSON.stringify(data),
+                success: function(response) {
+                    $('#shipmentResult').html(`运单号: ${response.shipmentTrackingNumber}`);
+                },
+                error: function(xhr) {
+                    $('#shipmentResult').html(`错误: ${xhr.responseText}`);
+                }
+            });
+        });
+        // 预约取件
+        $('#schedulePickup').click(function() {
+            const data = {
+                pickupDetails: {
+                    postalAddress: {
+                        countryCode: 'CN',
+                        postalCode: '200000',
+                        cityName: 'Shanghai',
+                        addressLine1: $('#pickupAddress').val()
+                    },
+                    contactInformation: {
+                        fullName: 'John Doe',
+                        phone: '+861234567890'
+                    }
+                },
+                plannedPickupDateAndTime: $('#pickupTime').val() + ':00+08:00',
+                accounts: [{ typeCode: 'shipper', number: '123456' }]
+            };
+            $.ajax({
+                url: '/api/pickup-requests',
+                method: 'POST',
+                headers: { 'Authorization': 'Basic REPLACE_BASIC_AUTH', 'content-type': 'application/json' },
+                data: JSON.stringify(data),
+                success: function(response) {
+                    $('#pickupResult').html(`取件确认号: ${response.pickupConfirmationNumber}`);
+                },
+                error: function(xhr) {
+                    $('#pickupResult').html(`错误: ${xhr.responseText}`);
+                }
+            });
+        });
+        // 查询运费
+        $('#getRates').click(function() {
+            const data = {
+                customerDetails: {
+                    shipperDetails: { postalCode: $('#rateShipperPostalCode').val(), countryCode: 'CN', cityName: 'Shanghai' },
+                    receiverDetails: { postalCode: $('#rateReceiverPostalCode').val(), countryCode: 'US', cityName: 'New York' }
+                },
+                accounts: [{ typeCode: 'shipper', number: '123456' }],
+                packages: [{ weight: 5.0, dimensions: { length: 30.0, width: 20.0, height: 15.0 } }],
+                plannedShippingDateAndTime: '2025-06-10T09:00:00+08:00',
+                unitOfMeasurement: 'metric',
+                isCustomsDeclarable: true
+            };
+            $.ajax({
+                url: '/api/rates',
+                method: 'POST',
+                headers: { 'Authorization': 'Basic REPLACE_BASIC_AUTH', 'content-type': 'application/json' },
+                data: JSON.stringify(data),
+                success: function(response) {
+                    const rates = response.rates.map(r => `${r.serviceCode}: ${r.totalPrice} ${r.currency}`).join('<br>');
+                    $('#rateResult').html(`运费估算:<br>${rates}`);
+                },
+                error: function(xhr) {
+                    $('#rateResult').html(`错误: ${xhr.responseText}`);
+                }
+            });
+        });
+        // 快件跟踪
+        $('#trackShipment').click(function() {
+            $.ajax({
+                url: `/api/track/shipments?trackingNumber=${$('#trackingNumber').val()}&language=zh`,
+                method: 'GET',
+                headers: { 'Authorization': 'Basic REPLACE_BASIC_AUTH' },
+                success: function(response) {
+                    const events = response.shipments[0].events.map(e => `${e.date}: ${e.description} (${e.location})`).join('<br>');
+                    $('#trackResult').html(`跟踪状态: ${response.shipments[0].status}<br>事件:<br>${events}`);
+                },
+                error: function(xhr) {
+                    $('#trackResult').html(`错误: ${xhr.responseText}`);
+                }
+            });
+        });
+    &lt;/script&gt;
+&lt;/body&gt;
+&lt;/html&gt;</code></pre>
+        <p><strong>时间</strong>：3周（界面设计1周，集成2周）</p>
+
+        <h3 class="text-xl font-semibold mt-4 mb-2">4. 申报单模块开发</h3>
+        <p><strong>目标</strong>：推送关务系统报关单数据至DHL。</p>
+
+        <h4 class="text-lg font-semibold mt-4 mb-2">4.1 后端开发</h4>
+        <p><strong>上传附件</strong>：</p>
+        <ul class="list-disc pl-6 mb-4">
+            <li>端点：<code>POST /dps-declaration-api/api/declare/upload-file</code></li>
+            <li>请求头：
+                <table class="w-full border-collapse border mb-4">
+                    <tr class="bg-gray-200"><th class="border p-2">字段</th><th class="border p-2">类型</th><th class="border p-2">必填</th><th class="border p-2">描述</th></tr>
+                    <tr><td>x-request-id</td><td>String</td><td>是</td><td>GUID或UUID</td></tr>
+                    <tr><td>Authorization</td><td>String</td><td>是</td><td>DPS Token</td></tr>
+                </table>
+            </li>
+        </ul>
+        <p><strong>提交申报</strong>：
+            <pre><code>{
+    "decMessage": {
+        "decHead": {
+            "contrNo": "112212",
+            "grossWet": "0.50000",
+            "netWt": "0.40000",
+            "iEFlag": "E"
+        },
+        "decLists": {
+            "decList": [
+                {
+                    "codeTs": "1202420000",
+                    "gName": "其他去壳花生",
+                    "declPrice": "100.00000",
+                    "gQty": "10.00000"
+                }
+            ]
+        },
+        "msgHead": {
+            "action": "A",
+            "awbNo": "7902324220",
+            "declareType": "D"
+        }
+    }
+}</code></pre>
+        </p>
+        <p><strong>时间</strong>：2周</p>
+
+        <h4 class="text-lg font-semibold mt-4 mb-2">4.2 前端开发</h4>
+        <p>提供申报单提交和附件上传界面，显示提交状态。</p>
+        <p><strong>时间</strong>：1周</p>
+
+        <h3 class="text-xl font-semibold mt-4 mb-2">5. 测试与部署</h3>
+        <ul class="list-disc pl-6 mb-4">
+            <li><strong>单元测试</strong>：测试API调用。</li>
+            <li><strong>集成测试</strong>：验证完整流程。</li>
+            <li><strong>用户验收测试</strong>：与华熙生物共同测试。</li>
+            <li><strong>部署</strong>：配置生产环境，设置监控。</li>
+        </ul>
+        <p><strong>时间</strong>：3周</p>
+
+        <h3 class="text-2xl font-semibold mt-8 mb-6 text-blue-600" id="timeline">📅 开发时间表</h3>
+        <div class="table-container">
+            <table>
+                <tr><th>阶段</th><th>时间</th><th>关键产出</th></tr>
+                <tr><td>🔧 准备阶段</td><td>1周</td><td>API文档、开发环境</td></tr>
+                <tr><td>🔐 认证实现</td><td>1周</td><td>认证模块、Token管理</td></tr>
+                <tr><td>📦 运单模块（后端+前端）</td><td>8周</td><td>完整运单功能</td></tr>
+                <tr><td>📋 申报单模块（后端+前端）</td><td>3周</td><td>申报提交功能</td></tr>
+                <tr><td>🧪 测试与部署</td><td>3周</td><td>生产环境就绪</td></tr>
+                <tr class="bg-blue-50"><td><strong>🎯 总计</strong></td><td><strong>12-14周</strong></td><td><strong>完整系统</strong></td></tr>
+            </table>
+        </div>
+
+        <h3 class="text-2xl font-semibold mt-8 mb-6 text-blue-600" id="security">🔒 安全与性能</h3>
+        <div class="highlight-box mb-6">
+            <h4 class="font-semibold text-gray-800 mb-3">⚠️ 重要技术要求</h4>
+            <ul class="list-disc pl-6 space-y-2">
+                <li><strong>API版本兼容性</strong>：确保使用DHL最新的API版本，避免废弃接口</li>
+                <li><strong>错误处理机制</strong>：完善的HTTP状态码处理和业务错误响应解析</li>
+                <li><strong>重试机制</strong>：网络异常时的指数退避重试策略</li>
+                <li><strong>日志记录</strong>：详细记录所有API调用和响应，便于问题排查</li>
+                <li><strong>数据验证</strong>：严格验证所有输入参数，防止无效请求</li>
+            </ul>
+        </div>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+            <div class="bg-red-50 p-6 rounded-lg border-l-4 border-red-500">
+                <h4 class="font-semibold text-red-800 mb-2">🛡️ 安全措施</h4>
+                <ul class="text-red-700 space-y-1">
+                    <li>• 加密存储凭证</li>
+                    <li>• 使用HTTPS（TLS 1.2+）</li>
+                    <li>• Token有效期管理</li>
+                </ul>
+            </div>
+            <div class="bg-yellow-50 p-6 rounded-lg border-l-4 border-yellow-500">
+                <h4 class="font-semibold text-yellow-800 mb-2">⚡ 性能优化</h4>
+                <ul class="text-yellow-700 space-y-1">
+                    <li>• API速率限制监控</li>
+                    <li>• 数据处理优化</li>
+                    <li>• 缓存机制设计</li>
+                </ul>
+            </div>
+        </div>
+
+        <h3 class="text-2xl font-semibold mt-8 mb-6 text-blue-600">📚 关键引用</h3>
+        <div class="highlight-box mb-6">
+            <h4 class="font-semibold text-gray-800 mb-3">🔍 检查发现的主要问题</h4>
+            <ul class="list-disc pl-6 space-y-2 text-sm">
+                <li><strong>缺失字段</strong>：原方案缺少必需的outputImageProperties、valueAddedServices等字段</li>
+                <li><strong>数据结构不完整</strong>：缺少详细的商品信息、海关申报等必需结构</li>
+                <li><strong>时间格式错误</strong>：DHL要求GMT时区格式，不是简单的ISO 8601</li>
+                <li><strong>认证实现简化</strong>：DPS Token管理需要考虑自动刷新机制</li>
+                <li><strong>响应处理不完整</strong>：缺少对DHL返回文档的base64解码处理</li>
+                <li><strong>业务字段映射</strong>：华熙生物的具体产品信息需要准确的HS编码</li>
+            </ul>
+        </div>
+        <div class="bg-gray-50 p-6 rounded-lg">
+            <ul class="space-y-3">
+                <li class="flex items-center"><span class="text-blue-500 mr-2">📄</span> DPS DECLARATION API v1.2.7 Documentation</li>
+                <li class="flex items-center"><span class="text-blue-500 mr-2">📖</span> DHL Online Declaration API Usage Guide v1.3</li>
+                <li class="flex items-center"><span class="text-blue-500 mr-2">📋</span> MyDHL API REST Developer Manual 202203</li>
+                <li class="flex items-center"><span class="text-blue-500 mr-2">🌐</span> <a href="https://developer.dhl.com/api-reference/dhl-express-mydhl-api-reference-docs-section/" class="text-blue-600 hover:text-blue-800 underline">DHL Developer Portal</a></li>
+            </ul>
+        </div>
+        
+        <div class="mt-12 p-6 bg-gradient-to-r from-blue-50 to-purple-50 rounded-lg border">
+            <p class="text-center text-gray-600 text-sm">📝 文档最后更新：2025年6月 | 🏢 华熙生物关务系统集成方案 | ✅ 已根据DHL官方文档校验修正</p>
+        </div>
+    </div>
+    
+    <script>
+        // 平滑滚动导航
+        document.querySelectorAll('.nav-menu a').forEach(anchor => {
+            anchor.addEventListener('click', function (e) {
+                e.preventDefault();
+                const target = document.querySelector(this.getAttribute('href'));
+                if (target) {
+                    target.scrollIntoView({
+                        behavior: 'smooth',
+                        block: 'start'
+                    });
+                }
+            });
+        });
+        
+        // 添加代码复制功能
+        document.querySelectorAll('pre').forEach(pre => {
+            const button = document.createElement('button');
+            button.innerText = '复制';
+            button.className = 'absolute top-2 right-2 bg-blue-500 text-white px-2 py-1 rounded text-xs hover:bg-blue-600';
+            pre.style.position = 'relative';
+            pre.appendChild(button);
+            
+            button.addEventListener('click', () => {
+                const code = pre.querySelector('code').innerText;
+                navigator.clipboard.writeText(code).then(() => {
+                    button.innerText = '已复制!';
+                    setTimeout(() => {
+                        button.innerText = '复制';
+                    }, 2000);
+                });
+            });
+        });
+    </script>
+</body>
+</html>
