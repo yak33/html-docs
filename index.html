@@ -78,6 +78,12 @@
                 title: "JDK 8 vs JDK 21 交互式探索",
                 date: "2025-06-01",
                 description: "深入对比JDK 8与JDK 21的新特性和改进"
+            },
+            {
+                name: "华熙生物关务系统与DHL API对接方案.html",
+                title: "华熙生物关务系统与DHL API对接方案",
+                date: "2025-06-07",
+                description: "完整的华熙生物关务系统与DHL Express API对接技术方案，包含运单管理和DPS申报功能的Java实现"
             }
             // 添加更多文件...
         ];
@@ -91,6 +97,8 @@
             if (filename.includes('vue') || filename.includes('react')) return '⚛️';
             if (filename.includes('css') || filename.includes('style')) return '🎨';
             if (filename.includes('js') || filename.includes('javascript')) return '📜';
+            if (filename.includes('华熙生物') || filename.includes('DHL') || filename.includes('API对接')) return '🚀';
+            if (filename.includes('关务') || filename.includes('物流')) return '📦';
             return '📄';
         }
 
